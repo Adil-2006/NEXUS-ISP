@@ -1,6 +1,9 @@
-"""Singleton model manager and warm-up utility."""
+"""Singleton model manager and warm-up utility with cloud deployment checkpoint hydration."""
+import os
+import base64
 import logging
 import time
+import urllib.request
 import torch
 import numpy as np
 from pathlib import Path
@@ -21,14 +24,50 @@ class ModelManager:
             cls._instance = cls()
         return cls._instance
 
+    def _ensure_checkpoint_exists(self, model_path: Path):
+        """If the checkpoint is not present (kept out of Git), hydrate it from environment or URL."""
+        if model_path.exists():
+            return
+
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Checkpoint not found at {model_path}. Attempting cloud hydration...")
+
+        # 1. Check for Base64 encoded weights in environment
+        b64_data = os.getenv("MODEL_BASE64")
+        if b64_data:
+            logger.info("Hydrating checkpoint from MODEL_BASE64 environment variable...")
+            try:
+                raw_bytes = base64.b64decode(b64_data.strip())
+                model_path.write_bytes(raw_bytes)
+                logger.info(f"Successfully restored checkpoint from MODEL_BASE64 ({len(raw_bytes):,} bytes).")
+                return
+            except Exception as e:
+                logger.error(f"Failed to decode MODEL_BASE64: {e}")
+
+        # 2. Check for public URL download (e.g. GitHub Releases, HuggingFace)
+        model_url = os.getenv("MODEL_URL")
+        if model_url:
+            logger.info(f"Downloading checkpoint from MODEL_URL: {model_url}...")
+            try:
+                urllib.request.urlretrieve(model_url, str(model_path))
+                logger.info("Successfully downloaded checkpoint from MODEL_URL.")
+                return
+            except Exception as e:
+                logger.error(f"Failed to download checkpoint from MODEL_URL: {e}")
+
+        raise FileNotFoundError(
+            f"Model checkpoint not found at {model_path}. "
+            "Because checkpoint files (*.pt) are excluded from Git, provide either the checkpoint file, "
+            "set the MODEL_BASE64 environment variable, or set the MODEL_URL environment variable."
+        )
+
     def initialize(self):
         if self._model is not None:
             return
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
         model_path = Path(settings.MODEL_PATH)
-        if not model_path.exists():
-            raise FileNotFoundError(f"Model checkpoint not found at: {model_path}")
+        self._ensure_checkpoint_exists(model_path)
 
         logger.info(f"Loading Hybrid ISP checkpoint from: {model_path} onto {self._device}...")
         t0 = time.perf_counter()

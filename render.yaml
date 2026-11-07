@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: nexus-isp
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: MODEL_PATH
+        value: /app/model/hybrid_isp_final.pt
+      - key: MAX_IMAGE_SIZE
+        value: "1536"
+      - key: MODEL_BASE64
+        sync: false

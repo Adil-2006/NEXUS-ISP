@@ -26,65 +26,33 @@ A modern web application and production-ready deep learning system combining **c
 
 ---
 
-## Project Structure
+## Deployment on Render
 
+This project includes a production multi-stage `Dockerfile` and `render.yaml` Blueprint.
+
+### 1. Push to GitHub
+```bash
+git remote add origin https://github.com/<YOUR_GITHUB_USERNAME>/NEXUS-ISP.git
+git branch -M main
+git push -u origin main
 ```
-NEXUS-ISP/
-├── .gitignore                   # Excludes checkpoints (*.pt), .venv, node_modules, dist
-├── model/
-│   └── hybrid_isp_final.pt      # Trained PyTorch checkpoint (preserved, untracked)
-├── results/                     # Offline benchmark CSVs and comparison grid
-│   ├── quality.csv
-│   ├── efficiency.csv
-│   └── comparison.png
-├── source/                      # Original training and evaluation scripts
-│   ├── isp_lib.py
-│   ├── models.py
-│   ├── train.py
-│   └── evaluate.py
-├── backend/                     # FastAPI Backend Server
-│   ├── app/
-│   │   ├── core/
-│   │   │   ├── config.py        # Settings and CORS
-│   │   │   └── model_loader.py  # Model manager & warm-up
-│   │   ├── isp/
-│   │   │   ├── isp_lib.py       # Classical ISP & RAW simulation
-│   │   │   ├── models.py        # Compact U-Net PyTorch definition
-│   │   │   └── pipeline.py      # End-to-end processing & Base64 encoding
-│   │   ├── schemas/
-│   │   │   └── isp_schema.py    # Request/Response Pydantic schemas
-│   │   └── main.py              # FastAPI endpoints & static file serving
-│   ├── tests/
-│   │   ├── test_model_inference.py  # Standalone PyTorch forward-pass test
-│   │   └── test_api_endpoints.py    # End-to-end FastAPI integration test
-│   └── requirements.txt
-├── frontend/                    # Modern React + Vite Application
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Header.jsx
-│   │   │   ├── ImageUploader.jsx
-│   │   │   ├── NoiseControls.jsx
-│   │   │   ├── ComparisonViewer.jsx
-│   │   │   ├── MetricsDashboard.jsx
-│   │   │   ├── DownloadBar.jsx
-│   │   │   └── ArchitectureModal.jsx
-│   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   └── index.css
-│   ├── package.json
-│   └── vite.config.js
-├── run_backend.bat              # 1-click script to start FastAPI backend
-├── run_frontend.bat             # 1-click script to start Vite dev server
-└── README.md
-```
+
+### 2. Deploy on Render
+1. Log into your [Render Dashboard](https://dashboard.render.com).
+2. Click **New +** &rarr; **Web Service**.
+3. Connect your GitHub repository `NEXUS-ISP`.
+4. Choose **Docker** as the environment.
+5. In **Environment Variables**, add:
+   - `MODEL_BASE64`: Copy and paste the contents of `model_base64.txt` (generated locally in your project root, excluded from Git). This allows Render to instantly restore your checkpoint at startup without committing weights to Git!
+6. Click **Create Web Service**.
+
+Render will automatically build the React frontend, start the FastAPI server, bind to `$PORT`, and provide your live HTTPS URL.
 
 ---
 
-## Getting Started
+## Local Development & Testing
 
 ### 1. Backend Setup & Testing
-
-Activate the virtual environment and run the test suites:
 
 ```powershell
 # Run standalone model inference test
@@ -94,7 +62,7 @@ Activate the virtual environment and run the test suites:
 .\.venv\Scripts\python.exe -u backend\tests\test_api_endpoints.py
 ```
 
-To run the backend server:
+To run the backend server locally:
 
 ```powershell
 .\run_backend.bat
@@ -105,9 +73,7 @@ cd backend
 
 The API will be available at `http://127.0.0.1:8000`. Swagger documentation is available at `http://127.0.0.1:8000/docs`.
 
-### 2. Frontend Setup
-
-In a separate terminal:
+### 2. Frontend Development
 
 ```powershell
 .\run_frontend.bat
@@ -117,11 +83,3 @@ npm run dev
 ```
 
 Open your browser to `http://localhost:5173`.
-
----
-
-## API Endpoints
-
-- `GET /api/health` – Returns health status, model load status, and device (CPU/CUDA).
-- `GET /api/model-info` – Returns architecture details, parameter count (63,347), and checkpoint details.
-- `POST /api/process` – Multipart form upload accepting `file`, `noise_level` (`low`, `medium`, `high`, `custom`), `custom_noise_a`, and `include_traditional`. Returns Base64 images and full benchmark metrics.

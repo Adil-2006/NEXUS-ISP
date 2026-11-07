@@ -17,6 +17,7 @@ __pycache__/
 *.safetensors
 model/*.pt
 hybrid_isp_final (1).pt
+model_base64.txt
 
 # Node / Frontend
 frontend/node_modules/
