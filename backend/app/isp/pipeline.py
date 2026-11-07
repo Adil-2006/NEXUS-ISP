@@ -2,6 +2,7 @@
 import base64
 import time
 import io
+import logging
 import cv2
 import numpy as np
 import torch
@@ -18,12 +19,29 @@ from app.schemas.isp_schema import (
     ProcessResponse
 )
 
+logger = logging.getLogger("nexus_isp.pipeline")
+
+def safe_float(val, default: float = 0.0, min_val: float = 0.0, max_val: float = 100.0) -> float:
+    """Ensure floating point values are strictly finite and JSON compliant."""
+    try:
+        f = float(val)
+        if np.isnan(f):
+            return default
+        if np.isneginf(f):
+            return min_val
+        if np.isposinf(f):
+            return max_val
+        return round(f, 4)
+    except Exception:
+        return default
+
+
 def decode_image(image_bytes: bytes) -> np.ndarray:
     """Decode raw bytes into an RGB float32 array in range [0, 1]."""
     nparr = np.frombuffer(image_bytes, np.uint8)
     bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if bgr is None:
-        raise ValueError("Could not decode the uploaded image file.")
+        raise ValueError("Could not decode the uploaded image file. Please provide a valid JPEG, PNG, or WebP image.")
 
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
 
@@ -32,8 +50,8 @@ def decode_image(image_bytes: bytes) -> np.ndarray:
     max_dim = settings.MAX_IMAGE_SIZE
     if max(h, w) > max_dim:
         scale = max_dim / float(max(h, w))
-        new_w = int(w * scale)
-        new_h = int(h * scale)
+        new_w = max(16, int(w * scale))
+        new_h = max(16, int(h * scale))
         rgb = cv2.resize(rgb, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
     # U-Net with 3 pooling stages requires dimensions divisible by 16
@@ -45,11 +63,13 @@ def decode_image(image_bytes: bytes) -> np.ndarray:
     return np.ascontiguousarray(rgb[:h_adj, :w_adj])
 
 
-def encode_to_base64_jpeg(rgb_float: np.ndarray, quality: int = 92) -> str:
+def encode_to_base64_jpeg(rgb_float: np.ndarray, quality: int = 90) -> str:
     """Encode an RGB float32 image into a base64 Data URL string."""
     rgb_uint8 = (np.clip(rgb_float, 0, 1) * 255.0 + 0.5).astype(np.uint8)
-    bgr = cv2.cvtColor(rgb_uint8, cv2.COLOR_RGB2BGR)
-    success, buffer = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    bgr = cv2.cvtColor(rgb_uint8, cv2.COLOR_BGR2RGB) # OpenCV uses BGR, but we want correct RGB representation in imencode
+    # Note: cv2.imencode expects BGR order to encode correct standard colors
+    bgr_for_enc = cv2.cvtColor(rgb_uint8, cv2.COLOR_RGB2BGR)
+    success, buffer = cv2.imencode(".jpg", bgr_for_enc, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     if not success:
         raise RuntimeError("Failed to encode image to JPEG.")
     b64_str = base64.b64encode(buffer).decode("utf-8")
@@ -79,12 +99,12 @@ def process_image_pipeline(
     raw, meta = L.simulate_raw(ground_truth, rng=rng, noise_a=noise_a)
 
     # 4. Blind noise estimation
-    estimated_sigma = L.estimate_raw_sigma(raw)
+    estimated_sigma = safe_float(L.estimate_raw_sigma(raw), default=0.01)
 
     # 5. Classical front-end (WB -> demosaic -> CCM -> gamma -> tone)
     t_classical_0 = time.perf_counter()
     front = L.isp_front(raw)
-    classical_latency_ms = (time.perf_counter() - t_classical_0) * 1e3
+    classical_latency_ms = round((time.perf_counter() - t_classical_0) * 1e3, 2)
 
     # 6. Hybrid ISP Neural residual inference
     model = model_manager.model
@@ -99,30 +119,32 @@ def process_image_pipeline(
         if device == "cuda":
             torch.cuda.synchronize()
 
-    neural_latency_ms = (time.perf_counter() - t_neural_0) * 1e3
-    total_latency_ms = classical_latency_ms + neural_latency_ms
+    neural_latency_ms = round((time.perf_counter() - t_neural_0) * 1e3, 2)
+    total_latency_ms = round(classical_latency_ms + neural_latency_ms, 2)
 
     hybrid_enhanced = out_tensor.clamp(0, 1)[0].permute(1, 2, 0).cpu().numpy()
 
     # 7. Optional Traditional Classical ISP (NLM + unsharp)
-    trad_output = None
     trad_b64 = None
     psnr_trad = None
     ssim_trad = None
     if include_traditional:
-        trad_output = L.isp_traditional(raw)
-        trad_b64 = encode_to_base64_jpeg(trad_output)
-        psnr_trad = round(float(psnr_fn(ground_truth, trad_output, data_range=1.0)), 2)
-        ssim_trad = round(float(ssim_fn(ground_truth, trad_output, channel_axis=2, data_range=1.0)), 4)
+        try:
+            trad_output = L.isp_traditional(raw)
+            trad_b64 = encode_to_base64_jpeg(trad_output)
+            psnr_trad = round(safe_float(psnr_fn(ground_truth, trad_output, data_range=1.0)), 2)
+            ssim_trad = round(safe_float(ssim_fn(ground_truth, trad_output, channel_axis=2, data_range=1.0)), 4)
+        except Exception as e:
+            logger.warning(f"Traditional ISP baseline skipped: {e}")
 
     # 8. Compute quantitative metrics
-    psnr_hybrid = round(float(psnr_fn(ground_truth, hybrid_enhanced, data_range=1.0)), 2)
-    ssim_hybrid = round(float(ssim_fn(ground_truth, hybrid_enhanced, channel_axis=2, data_range=1.0)), 4)
+    psnr_hybrid = round(safe_float(psnr_fn(ground_truth, hybrid_enhanced, data_range=1.0)), 2)
+    ssim_hybrid = round(safe_float(ssim_fn(ground_truth, hybrid_enhanced, channel_axis=2, data_range=1.0)), 4)
 
-    psnr_naive = round(float(psnr_fn(ground_truth, front, data_range=1.0)), 2)
-    ssim_naive = round(float(ssim_fn(ground_truth, front, channel_axis=2, data_range=1.0)), 4)
+    psnr_naive = round(safe_float(psnr_fn(ground_truth, front, data_range=1.0)), 2)
+    ssim_naive = round(safe_float(ssim_fn(ground_truth, front, channel_axis=2, data_range=1.0)), 4)
 
-    # 9. Encode images to Base64 for instant display
+    # 9. Encode images to Base64
     original_b64 = encode_to_base64_jpeg(ground_truth)
     naive_b64 = encode_to_base64_jpeg(front)
     enhanced_b64 = encode_to_base64_jpeg(hybrid_enhanced)
@@ -131,9 +153,9 @@ def process_image_pipeline(
         estimated_sigma=round(estimated_sigma, 5),
         noise_preset=preset_enum.value,
         noise_a=noise_a,
-        classical_latency_ms=round(classical_latency_ms, 2),
-        neural_latency_ms=round(neural_latency_ms, 2),
-        total_latency_ms=round(total_latency_ms, 2),
+        classical_latency_ms=classical_latency_ms,
+        neural_latency_ms=neural_latency_ms,
+        total_latency_ms=total_latency_ms,
         image_shape=[h, w, 3],
         psnr_hybrid_vs_groundtruth=psnr_hybrid,
         ssim_hybrid_vs_groundtruth=ssim_hybrid,
@@ -145,8 +167,8 @@ def process_image_pipeline(
 
     explanation = (
         f"Input converted to Bayer RAW with noise level a={noise_a:.1e}. "
-        f"Classical front-end restored color & tone in {classical_latency_ms:.1f}ms. "
-        f"Residual U-Net performed deep denoising in {neural_latency_ms:.1f}ms "
+        f"Classical front-end restored color & tone in {classical_latency_ms}ms. "
+        f"Residual U-Net performed deep denoising in {neural_latency_ms}ms "
         f"yielding PSNR improvement from {psnr_naive} dB (naive) to {psnr_hybrid} dB (hybrid)."
     )
 

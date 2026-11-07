@@ -69,8 +69,20 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Unknown processing error' }));
-        throw new Error(errorData.detail || `Server returned ${response.status}`);
+        let errorDetail = '';
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || `Server returned status ${response.status}`;
+        } catch {
+          // If response is not JSON (e.g. Render 502/503/504 while building/waking up)
+          if (response.status === 502 || response.status === 503 || response.status === 504) {
+            errorDetail = `Render is currently deploying or waking up from sleep (HTTP ${response.status}). Please wait ~30-60 seconds and try again.`;
+          } else {
+            const rawText = await response.text().catch(() => '');
+            errorDetail = rawText ? `Server returned HTTP ${response.status}: ${rawText.slice(0, 150)}` : `Server returned HTTP ${response.status}`;
+          }
+        }
+        throw new Error(errorDetail);
       }
 
       const data = await response.json();
