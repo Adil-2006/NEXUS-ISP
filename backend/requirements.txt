@@ -1,0 +1,13 @@
+# Deep Learning & Numerical Computing
+torch
+numpy
+opencv-python-headless
+scikit-image
+Pillow
+
+# API Server & Testing
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+httpx

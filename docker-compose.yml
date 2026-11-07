@@ -1,0 +1,12 @@
+services:
+  nexus-isp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexus-isp-app
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/app/model/hybrid_isp_final.pt
+      - MAX_IMAGE_SIZE=1536
+    restart: unless-stopped

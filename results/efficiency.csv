@@ -1,0 +1,2 @@
+model,params_K,size_MB,latency_ms,peak_gpu_MB,classical_frontend_ms
+hybrid,63.347,0.24164962768554688,9.919261000050028,45.75927734375,7.865515000048617

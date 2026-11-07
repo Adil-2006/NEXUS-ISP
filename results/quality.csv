@@ -1,0 +1,55 @@
+condition,method,metric,value
+low_noise,naive (no denoise),PSNR,20.813441609955046
+low_noise,naive (no denoise),SSIM,0.7066539525985718
+low_noise,naive (no denoise),dE2000,13.008595037460328
+low_noise,traditional,PSNR,21.42352565707009
+low_noise,traditional,SSIM,0.6909723281860352
+low_noise,traditional,dE2000,10.76650390625
+low_noise,hybrid,PSNR,21.565533683737804
+low_noise,hybrid,SSIM,0.7676413059234619
+low_noise,hybrid,dE2000,11.934133839607238
+mid_noise,naive (no denoise),PSNR,19.449003218854326
+mid_noise,naive (no denoise),SSIM,0.5304468870162964
+mid_noise,naive (no denoise),dE2000,15.728201150894165
+mid_noise,traditional,PSNR,21.193375763126166
+mid_noise,traditional,SSIM,0.6358979344367981
+mid_noise,traditional,dE2000,11.17363007068634
+mid_noise,hybrid,PSNR,20.472333530451042
+mid_noise,hybrid,SSIM,0.6312416195869446
+mid_noise,hybrid,dE2000,13.618430614471436
+high_noise (low light),naive (no denoise),PSNR,15.990656254973526
+high_noise (low light),naive (no denoise),SSIM,0.31057292222976685
+high_noise (low light),naive (no denoise),dE2000,21.167354011535643
+high_noise (low light),traditional,PSNR,19.729471439391126
+high_noise (low light),traditional,SSIM,0.500068724155426
+high_noise (low light),traditional,dE2000,13.502776861190796
+high_noise (low light),hybrid,PSNR,17.39349098983448
+high_noise (low light),hybrid,SSIM,0.40925249457359314
+high_noise (low light),hybrid,dE2000,18.07708306312561
+warm_light+mid,naive (no denoise),PSNR,19.400637069814916
+warm_light+mid,naive (no denoise),SSIM,0.5336917638778687
+warm_light+mid,naive (no denoise),dE2000,15.752242851257325
+warm_light+mid,traditional,PSNR,21.19504669175531
+warm_light+mid,traditional,SSIM,0.6366076469421387
+warm_light+mid,traditional,dE2000,11.18645100593567
+warm_light+mid,hybrid,PSNR,20.37843751475264
+warm_light+mid,hybrid,SSIM,0.6300116777420044
+warm_light+mid,hybrid,dE2000,13.717995119094848
+cool_light+mid,naive (no denoise),PSNR,19.53354690229827
+cool_light+mid,naive (no denoise),SSIM,0.5334187150001526
+cool_light+mid,naive (no denoise),dE2000,15.661929321289062
+cool_light+mid,traditional,PSNR,21.178082154016373
+cool_light+mid,traditional,SSIM,0.6345481276512146
+cool_light+mid,traditional,dE2000,11.20654363632202
+cool_light+mid,hybrid,PSNR,20.60816561581131
+cool_light+mid,hybrid,SSIM,0.6359272003173828
+cool_light+mid,hybrid,dE2000,13.489360141754151
+warm+high_noise,naive (no denoise),PSNR,15.915356730254965
+warm+high_noise,naive (no denoise),SSIM,0.31609782576560974
+warm+high_noise,naive (no denoise),dE2000,21.14467010498047
+warm+high_noise,traditional,PSNR,19.734771532731784
+warm+high_noise,traditional,SSIM,0.5058116912841797
+warm+high_noise,traditional,dE2000,13.532164192199707
+warm+high_noise,hybrid,PSNR,17.20848306803979
+warm+high_noise,hybrid,SSIM,0.4151345193386078
+warm+high_noise,hybrid,dE2000,18.211004161834715
