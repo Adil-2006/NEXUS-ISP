@@ -25,7 +25,7 @@ class ModelManager:
         return cls._instance
 
     def _ensure_checkpoint_exists(self, model_path: Path):
-        """If the checkpoint is not present (kept out of Git), hydrate it from environment or URL."""
+        """If the checkpoint is not present on disk, hydrate it from environment, URL, or embedded fallback."""
         if model_path.exists():
             return
 
@@ -55,10 +55,22 @@ class ModelManager:
             except Exception as e:
                 logger.error(f"Failed to download checkpoint from MODEL_URL: {e}")
 
+        # 3. Automatic embedded fallback (zero-configuration cloud deployments)
+        try:
+            from app.core.embedded_weights import EMBEDDED_MODEL_BASE64
+            if EMBEDDED_MODEL_BASE64:
+                logger.info("Hydrating checkpoint from embedded fallback weights...")
+                raw_bytes = base64.b64decode(EMBEDDED_MODEL_BASE64.strip())
+                model_path.write_bytes(raw_bytes)
+                logger.info(f"Successfully restored checkpoint from embedded weights ({len(raw_bytes):,} bytes).")
+                return
+        except Exception as e:
+            logger.warning(f"Could not load embedded fallback weights: {e}")
+
         raise FileNotFoundError(
             f"Model checkpoint not found at {model_path}. "
-            "Because checkpoint files (*.pt) are excluded from Git, provide either the checkpoint file, "
-            "set the MODEL_BASE64 environment variable, or set the MODEL_URL environment variable."
+            "Please ensure the checkpoint exists, set the MODEL_BASE64 environment variable, "
+            "or set the MODEL_URL environment variable."
         )
 
     def initialize(self):
